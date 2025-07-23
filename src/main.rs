@@ -1,5 +1,5 @@
-
 mod app;
+mod sprite;
 mod world;
 
 use crate::app::App;
@@ -10,6 +10,6 @@ fn main() {
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = App::new();
+    let mut app = App::new().unwrap();
     event_loop.run_app(&mut app).unwrap();
 }
