@@ -22,6 +22,10 @@ impl World {
             pixel[3] = 255;
         }
     }
+
+    pub fn move_player(&mut self, dx: i32) {
+        self.player.move_by(dx);
+    }
 }
 
 pub struct WorldBuilder {
@@ -30,9 +34,7 @@ pub struct WorldBuilder {
 
 impl WorldBuilder {
     pub fn new() -> Self {
-        Self {
-            player: None,
-        }
+        Self { player: None }
     }
 
     pub fn with_player(mut self, player: Sprite) -> Self {
@@ -42,10 +44,6 @@ impl WorldBuilder {
 
     pub fn build(self) -> Result<World, String> {
         let player = self.player.ok_or("Player is required")?;
-        Ok(
-            World {
-                player
-            }
-        )
+        Ok(World { player })
     }
 }
