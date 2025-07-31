@@ -1,28 +1,40 @@
 use macroquad::prelude::*;
 
+struct Shape {
+    size: f32,
+    speed: f32,
+    x: f32,
+    y: f32,
+}
+
 #[macroquad::main("Hello world game")]
 async fn main() {
-    let mut x = 100.0;
-    let mut y = 100.0;
-    let radius = 40.0;
-    let mut dx = 5.0;
-    let mut dy = 5.0;
+    rand::srand(miniquad::date::now() as u64);
+    const SPEED: f32 = 300.0;
+    // let mut squares = Vec::new();
+    let mut circle = Shape {
+        size: 16.0,
+        speed: SPEED,
+        x: screen_width() / 2.0,
+        y: screen_height() / 2.0,
+    };
 
     loop {
-        clear_background(WHITE);
+        clear_background(DARKPURPLE);
+        let delta_time = get_frame_time();
 
-        x += dx;
-        y += dy;
-
-        if x - radius < 0.0 || x + radius > screen_width() {
-            dx = -dx;
+        if is_key_down(KeyCode::Left) {
+            circle.x -= SPEED * delta_time;
+        } else if is_key_down(KeyCode::Right) {
+            circle.x += SPEED * delta_time;
         }
-        if y - radius < 0.0 || y + radius > screen_height() {
-            dy = -dy;
+        if is_key_down(KeyCode::Up) {
+            circle.y -= SPEED * delta_time;
+        } else if is_key_down(KeyCode::Down) {
+            circle.y += SPEED * delta_time;
         }
 
-        draw_text("Bouncing ball", 20.0, 40.0, 30.0, BLACK);
-        draw_circle(x, y, radius, RED);
+        draw_circle(circle.x, circle.y, circle.size, YELLOW);
         next_frame().await
     }
 }
