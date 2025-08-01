@@ -11,6 +11,7 @@ struct Shape {
     speed: f32,
     x: f32,
     y: f32,
+    collided: bool,
 }
 
 impl Shape {
@@ -36,7 +37,7 @@ impl Shape {
     }
 }
 
-#[macroquad::main("Hello world game")]
+#[macroquad::main("Space Invaders")]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
     const SPEED: f32 = 300.0;
@@ -47,7 +48,9 @@ async fn main() {
         speed: SPEED,
         x: screen_width() / 2.0,
         y: screen_height() / 2.0,
+        collided: false,
     };
+    let mut bullets = Vec::new();
     let mut gameover = false;
 
     loop {
@@ -65,17 +68,20 @@ async fn main() {
                 speed,
                 x,
                 y: -size,
+                collided: false,
             })
         }
 
+        // If gameover, press space to restart game
         if gameover && is_key_pressed(KeyCode::Space) {
             gameover = false;
             squares.clear();
+            bullets.clear();
             circle.x = screen_width() / 2.0;
             circle.y = screen_height() / 2.0;
         }
 
-        // Handle input for the circle
+        // Handle input and movement
         if !gameover {
             if is_key_down(KeyCode::Left) {
                 circle.x -= circle.speed * delta_time;
@@ -87,11 +93,25 @@ async fn main() {
             } else if is_key_down(KeyCode::Down) {
                 circle.y += circle.speed * delta_time;
             }
+            if is_key_pressed(KeyCode::Space) {
+                bullets.push(Shape {
+                    typ: ShapeType::Circle,
+                    size: 5.0,
+                    speed: circle.speed * 2.0,
+                    x: circle.x,
+                    y: circle.y,
+                    collided: false,
+                })
+            }
 
+            for bullet in &mut bullets {
+                bullet.y -= bullet.speed * delta_time;
+            }
             for square in &mut squares {
                 square.y += square.speed * delta_time;
             }
-            squares.retain(|square| square.y <= screen_height());
+            squares.retain(|square| square.y <= screen_height() && !square.collided);
+            bullets.retain(|bullet| bullet.y > bullet.size && !bullet.collided);
             circle.x = clamp(circle.x, circle.size, screen_width() - circle.size);
             circle.y = clamp(circle.y, circle.size, screen_height() - circle.size);
         }
@@ -100,8 +120,19 @@ async fn main() {
         if squares.iter().any(|square| square.collides_with(&circle)) {
             gameover = true;
         }
+        for bullet in &mut bullets {
+            for square in &mut squares {
+                if bullet.collides_with(square) {
+                    bullet.collided = true;
+                    square.collided = true;
+                }
+            }
+        }
 
         // Render everything
+        for bullet in &bullets {
+            draw_circle(bullet.x, bullet.y, bullet.size, RED);
+        }
         draw_circle(circle.x, circle.y, circle.size, YELLOW);
         for square in &squares {
             draw_rectangle(square.x, square.y, square.size, square.size, GREEN);
@@ -115,7 +146,7 @@ async fn main() {
                 screen_width() / 2.0 - text_dimensions.width / 2.0,
                 screen_height() / 2.0,
                 50.0,
-                RED
+                RED,
             );
         }
 
