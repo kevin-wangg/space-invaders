@@ -83,13 +83,22 @@ async fn main() {
                     score = 0;
                     game_state = GameState::Playing;
                 }
+                let title_text = "Space Invaders";
                 let text = "Press space to start";
-                let text_dimensions = measure_text(text, None, 50, 1.0);
+                let title_text_dimensions = measure_text(title_text, None, 50, 1.0);
+                let text_dimensions = measure_text(text, None, 25, 1.0);
+                draw_text(
+                    title_text,
+                    screen_width() / 2.0 - title_text_dimensions.width / 2.0,
+                    screen_height() / 2.0,
+                    50.0,
+                    WHITE,
+                );
                 draw_text(
                     text,
                     screen_width() / 2.0 - text_dimensions.width / 2.0,
-                    screen_height() / 2.0,
-                    50.0,
+                    screen_height() / 2.0 + title_text_dimensions.height,
+                    25.0,
                     WHITE,
                 );
             }
