@@ -1,5 +1,6 @@
 use std::fs;
 
+use macroquad::experimental::animation::{AnimatedSprite, Animation};
 use macroquad::prelude::*;
 
 enum ShapeType {
@@ -47,7 +48,6 @@ impl Shape {
 }
 
 const FRAGMENT_SHADER: &str = include_str!("starfield-shader.glsl");
-
 const VERTEX_SHADER: &str = "#version 100
     attribute vec3 position;
     attribute vec2 texcoord;
@@ -84,6 +84,7 @@ async fn main() {
         .map_or(Ok(0), |i| i.parse::<u32>())
         .unwrap_or(0);
 
+    // Shader field stuff
     let mut direction_modifier: f32 = 0.0;
     let render_target = render_target(320, 150);
     render_target.texture.set_filter(FilterMode::Nearest);
@@ -101,6 +102,38 @@ async fn main() {
         },
     )
     .unwrap();
+
+    set_pc_assets_folder("assets");
+
+    let ship_texture = load_texture("ship.png")
+        .await
+        .expect("Couldn't load ship.png'");
+    ship_texture.set_filter(FilterMode::Nearest);
+    let bullet_texture = load_texture("laser-bolts.png")
+        .await
+        .expect("Couldn't load laser-bolts.png'");
+    bullet_texture.set_filter(FilterMode::Nearest);
+    build_textures_atlas();
+    let mut bullet_sprite = AnimatedSprite::new(
+        16,
+        16,
+        &[
+            Animation {
+                name: "bullet".to_string(),
+                row: 0,
+                frames: 2,
+                fps: 12,
+            },
+            Animation {
+                name: "bolt".to_string(),
+                row: 1,
+                frames: 2,
+                fps: 12,
+            },
+        ],
+        true,
+    );
+    bullet_sprite.set_animation(1);
 
     loop {
         clear_background(BLACK);
