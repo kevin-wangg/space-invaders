@@ -1,5 +1,6 @@
 use std::fs;
 
+use macroquad::audio::{PlaySoundParams, load_sound, play_sound, play_sound_once, stop_sound};
 use macroquad::experimental::animation::{AnimatedSprite, Animation};
 use macroquad::prelude::*;
 
@@ -103,6 +104,14 @@ async fn main() {
         .await
         .expect("Couldn't load enemy-small.png'");
     enemy_small_texture.set_filter(FilterMode::Nearest);
+    let enemy_medium_texture = load_texture("enemy-medium.png")
+        .await
+        .expect("Couldn't load enemy-medium.png'");
+    enemy_medium_texture.set_filter(FilterMode::Nearest);
+    let enemy_big_texture = load_texture("enemy-big.png")
+        .await
+        .expect("Couldn't load enemy-big.png'");
+    enemy_big_texture.set_filter(FilterMode::Nearest);
     build_textures_atlas();
 
     let mut bullet_sprite = AnimatedSprite::new(
@@ -126,6 +135,7 @@ async fn main() {
     );
     bullet_sprite.set_animation(1);
 
+    // Define the sprites
     let mut ship_sprite = AnimatedSprite::new(
         16,
         24,
@@ -151,7 +161,6 @@ async fn main() {
         ],
         true,
     );
-
     let mut enemy_small_sprite = AnimatedSprite::new(
         17,
         16,
@@ -163,7 +172,35 @@ async fn main() {
         }],
         true,
     );
+    let mut enemy_medium_sprite = AnimatedSprite::new(
+        32,
+        16,
+        &[Animation {
+            name: "enemy_medium".to_string(),
+            row: 0,
+            frames: 2,
+            fps: 12,
+        }],
+        true,
+    );
+    let mut enemy_big_sprite = AnimatedSprite::new(
+        32,
+        32,
+        &[Animation {
+            name: "enemy_big".to_string(),
+            row: 0,
+            frames: 2,
+            fps: 12,
+        }],
+        true,
+    );
 
+    // Load audio files
+    let theme_music = load_sound("8bit-spaceshooter.ogg").await.unwrap();
+    let sound_explosion = load_sound("explosion.wav").await.unwrap();
+    let sound_laser = load_sound("laser.wav").await.unwrap();
+
+    let mut theme_music_playing = false;
     loop {
         clear_background(BLACK);
         material.set_uniform("iResolution", (screen_width(), screen_height()));
@@ -182,6 +219,18 @@ async fn main() {
         gl_use_default_material();
         match game_state {
             GameState::MainMenu => {
+                // Play theme music
+                if !theme_music_playing {
+                    play_sound(
+                        &theme_music,
+                        PlaySoundParams {
+                            looped: true,
+                            volume: 1.,
+                        },
+                    );
+                    theme_music_playing = true;
+                }
+
                 // Press escape to exit game in the main menu
                 if is_key_pressed(KeyCode::Escape) {
                     std::process::exit(0);
@@ -218,7 +267,7 @@ async fn main() {
                 let delta_time = get_frame_time();
                 // Randomly generate the squares
                 if rand::gen_range(0, 99) > 95 {
-                    let size = rand::gen_range(16.0, 64.0);
+                    let size = rand::gen_range(16.0, 100.0);
                     let speed = rand::gen_range(50.0, 150.0);
                     let x = rand::gen_range(size / 2.0, screen_width() - size / 2.0);
                     squares.push(Shape {
@@ -258,7 +307,8 @@ async fn main() {
                         x: circle.x,
                         y: circle.y - 24.0,
                         collided: false,
-                    })
+                    });
+                    play_sound_once(&sound_laser);
                 }
 
                 for bullet in &mut bullets {
@@ -275,6 +325,8 @@ async fn main() {
                 ship_sprite.update();
                 bullet_sprite.update();
                 enemy_small_sprite.update();
+                enemy_medium_sprite.update();
+                enemy_big_sprite.update();
 
                 // Set gameover to true if circle collides with any square
                 if squares.iter().any(|square| square.collides_with(&circle)) {
@@ -292,6 +344,7 @@ async fn main() {
                             square.collided = true;
                             score += square.size.round() as u32;
                             high_score = high_score.max(score);
+                            play_sound_once(&sound_explosion);
                         }
                     }
                 }
@@ -329,10 +382,17 @@ async fn main() {
                 );
 
                 // Draw the enemies
-                let enemy_frame = enemy_small_sprite.frame();
                 for square in &squares {
+                    let (enemy_frame, texture) = if square.size <= 24.0 {
+                        (enemy_small_sprite.frame(), &enemy_small_texture)
+                    } else if square.size <= 40.0 {
+                        (enemy_medium_sprite.frame(), &enemy_medium_texture)
+                    } else {
+                        (enemy_big_sprite.frame(), &enemy_big_texture)
+                    };
+
                     draw_texture_ex(
-                        &enemy_small_texture,
+                        texture,
                         square.x - square.size / 2.0,
                         square.y - square.size / 2.0,
                         WHITE,
@@ -377,6 +437,8 @@ async fn main() {
                 );
             }
             GameState::GameOver => {
+                theme_music_playing = false;
+                stop_sound(&theme_music);
                 if is_key_pressed(KeyCode::Space) {
                     game_state = GameState::MainMenu;
                 }
