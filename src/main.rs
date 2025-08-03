@@ -3,13 +3,7 @@ use std::fs;
 use macroquad::experimental::animation::{AnimatedSprite, Animation};
 use macroquad::prelude::*;
 
-enum ShapeType {
-    Circle,
-    Rect,
-}
-
 struct Shape {
-    typ: ShapeType,
     size: f32,
     speed: f32,
     x: f32,
@@ -30,19 +24,11 @@ impl Shape {
     }
 
     fn rect(&self) -> Rect {
-        match self.typ {
-            ShapeType::Circle => Rect {
-                x: self.x - self.size,
-                y: self.y - self.size,
-                w: self.size * 2.0,
-                h: self.size * 2.0,
-            },
-            ShapeType::Rect => Rect {
-                x: self.x,
-                y: self.y,
-                w: self.size,
-                h: self.size,
-            },
+        Rect {
+            x: self.x - self.size / 2.0,
+            y: self.y - self.size / 2.0,
+            w: self.size,
+            h: self.size,
         }
     }
 }
@@ -70,8 +56,7 @@ async fn main() {
     const SPEED: f32 = 300.0;
     let mut squares = Vec::new();
     let mut circle = Shape {
-        typ: ShapeType::Circle,
-        size: 16.0,
+        size: 32.0,
         speed: SPEED,
         x: screen_width() / 2.0,
         y: screen_height() / 2.0,
@@ -105,6 +90,7 @@ async fn main() {
 
     set_pc_assets_folder("assets");
 
+    // Load the textures
     let ship_texture = load_texture("ship.png")
         .await
         .expect("Couldn't load ship.png'");
@@ -113,7 +99,12 @@ async fn main() {
         .await
         .expect("Couldn't load laser-bolts.png'");
     bullet_texture.set_filter(FilterMode::Nearest);
+    let enemy_small_texture = load_texture("enemy-small.png")
+        .await
+        .expect("Couldn't load enemy-small.png'");
+    enemy_small_texture.set_filter(FilterMode::Nearest);
     build_textures_atlas();
+
     let mut bullet_sprite = AnimatedSprite::new(
         16,
         16,
@@ -158,6 +149,18 @@ async fn main() {
                 fps: 12,
             },
         ],
+        true,
+    );
+
+    let mut enemy_small_sprite = AnimatedSprite::new(
+        17,
+        16,
+        &[Animation {
+            name: "enemy_small".to_string(),
+            row: 0,
+            frames: 2,
+            fps: 12,
+        }],
         true,
     );
 
@@ -213,14 +216,12 @@ async fn main() {
             }
             GameState::Playing => {
                 let delta_time = get_frame_time();
-
                 // Randomly generate the squares
                 if rand::gen_range(0, 99) > 95 {
                     let size = rand::gen_range(16.0, 64.0);
                     let speed = rand::gen_range(50.0, 150.0);
-                    let x = rand::gen_range(0.0, screen_width() - size);
+                    let x = rand::gen_range(size / 2.0, screen_width() - size / 2.0);
                     squares.push(Shape {
-                        typ: ShapeType::Rect,
                         size,
                         speed,
                         x,
@@ -252,11 +253,10 @@ async fn main() {
                 }
                 if is_key_pressed(KeyCode::Space) {
                     bullets.push(Shape {
-                        typ: ShapeType::Circle,
-                        size: 5.0,
+                        size: 32.0,
                         speed: circle.speed * 2.0,
                         x: circle.x,
-                        y: circle.y,
+                        y: circle.y - 24.0,
                         collided: false,
                     })
                 }
@@ -274,6 +274,7 @@ async fn main() {
 
                 ship_sprite.update();
                 bullet_sprite.update();
+                enemy_small_sprite.update();
 
                 // Set gameover to true if circle collides with any square
                 if squares.iter().any(|square| square.collides_with(&circle)) {
@@ -282,6 +283,8 @@ async fn main() {
                     }
                     game_state = GameState::GameOver;
                 }
+
+                // Check bullet collisions
                 for bullet in &mut bullets {
                     for square in &mut squares {
                         if bullet.collides_with(square) {
@@ -294,8 +297,21 @@ async fn main() {
                 }
 
                 // Render everything
+
+                // Draw the bullets
+                let bullet_frame = bullet_sprite.frame();
                 for bullet in &bullets {
-                    draw_circle(bullet.x, bullet.y, bullet.size, RED);
+                    draw_texture_ex(
+                        &bullet_texture,
+                        bullet.x - bullet.size / 2.0,
+                        bullet.y - bullet.size / 2.0,
+                        WHITE,
+                        DrawTextureParams {
+                            dest_size: Some(vec2(bullet.size, bullet.size)),
+                            source: Some(bullet_frame.source_rect),
+                            ..Default::default()
+                        },
+                    );
                 }
 
                 // Draw the ship
@@ -309,12 +325,26 @@ async fn main() {
                         dest_size: Some(ship_frame.dest_size * 2.0),
                         source: Some(ship_frame.source_rect),
                         ..Default::default()
-                    }
+                    },
                 );
 
+                // Draw the enemies
+                let enemy_frame = enemy_small_sprite.frame();
                 for square in &squares {
-                    draw_rectangle(square.x, square.y, square.size, square.size, GREEN);
+                    draw_texture_ex(
+                        &enemy_small_texture,
+                        square.x - square.size / 2.0,
+                        square.y - square.size / 2.0,
+                        WHITE,
+                        DrawTextureParams {
+                            dest_size: Some(vec2(square.size, square.size)),
+                            source: Some(enemy_frame.source_rect),
+                            ..Default::default()
+                        },
+                    );
                 }
+
+                // Draw the scores
                 draw_text(
                     format!("Score: {}", score).as_str(),
                     10.0,
@@ -324,7 +354,6 @@ async fn main() {
                 );
                 let highscore_text = format!("High score: {}", high_score);
                 let text_dimensions = measure_text(highscore_text.as_str(), None, 25, 1.0);
-
                 draw_text(
                     highscore_text.as_str(),
                     screen_width() - text_dimensions.width - 10.0,
