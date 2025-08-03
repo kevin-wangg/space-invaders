@@ -46,6 +46,24 @@ impl Shape {
     }
 }
 
+const FRAGMENT_SHADER: &str = include_str!("starfield-shader.glsl");
+
+const VERTEX_SHADER: &str = "#version 100
+    attribute vec3 position;
+    attribute vec2 texcoord;
+    attribute vec4 color0;
+    varying float iTime;
+
+    uniform mat4 Model;
+    uniform mat4 Projection;
+    uniform vec4 _Time;
+
+    void main() {
+        gl_Position = Projection * Model * vec4(position, 1);
+        iTime = _Time.x;
+    }
+";
+
 #[macroquad::main("Space Invaders")]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
@@ -66,8 +84,40 @@ async fn main() {
         .map_or(Ok(0), |i| i.parse::<u32>())
         .unwrap_or(0);
 
+    let mut direction_modifier: f32 = 0.0;
+    let render_target = render_target(320, 150);
+    render_target.texture.set_filter(FilterMode::Nearest);
+    let material = load_material(
+        ShaderSource::Glsl {
+            vertex: VERTEX_SHADER,
+            fragment: FRAGMENT_SHADER,
+        },
+        MaterialParams {
+            uniforms: vec![
+                UniformDesc::new("iResolution", UniformType::Float2),
+                UniformDesc::new("direction_modifier", UniformType::Float1),
+            ],
+            ..Default::default()
+        },
+    )
+    .unwrap();
+
     loop {
-        clear_background(DARKPURPLE);
+        clear_background(BLACK);
+        material.set_uniform("iResolution", (screen_width(), screen_height()));
+        material.set_uniform("direction_modifier", direction_modifier);
+        gl_use_material(&material);
+        draw_texture_ex(
+            &render_target.texture,
+            0.,
+            0.,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(vec2(screen_width(), screen_height())),
+                ..Default::default()
+            },
+        );
+        gl_use_default_material();
         match game_state {
             GameState::MainMenu => {
                 // Press escape to exit game in the main menu
@@ -128,8 +178,10 @@ async fn main() {
                 // Handle input and movement
                 if is_key_down(KeyCode::Left) {
                     circle.x -= circle.speed * delta_time;
+                    direction_modifier -= 0.05 * delta_time;
                 } else if is_key_down(KeyCode::Right) {
                     circle.x += circle.speed * delta_time;
+                    direction_modifier += 0.05 * delta_time;
                 }
                 if is_key_down(KeyCode::Up) {
                     circle.y -= circle.speed * delta_time;
@@ -220,13 +272,22 @@ async fn main() {
                 if is_key_pressed(KeyCode::Space) {
                     game_state = GameState::MainMenu;
                 }
-                let text = "GAME OVER. Press space to return to main menu";
+                let text = "GAME OVER";
+                let subtext = "Press space to return to main menu";
                 let text_dimensions = measure_text(text, None, 50, 1.0);
+                let subtext_dimensions = measure_text(subtext, None, 25, 1.0);
                 draw_text(
                     text,
                     screen_width() / 2.0 - text_dimensions.width / 2.0,
                     screen_height() / 2.0,
                     50.0,
+                    RED,
+                );
+                draw_text(
+                    subtext,
+                    screen_width() / 2.0 - subtext_dimensions.width / 2.0,
+                    screen_height() / 2.0 + text_dimensions.height,
+                    25.0,
                     RED,
                 );
             }
