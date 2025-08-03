@@ -1,3 +1,5 @@
+use std::fs;
+
 use macroquad::prelude::*;
 
 enum ShapeType {
@@ -52,6 +54,10 @@ async fn main() {
     };
     let mut bullets = Vec::new();
     let mut gameover = false;
+    let mut score: u32 = 0;
+    let mut high_score: u32 = fs::read_to_string("highscore.dat")
+        .map_or(Ok(0), |i| i.parse::<u32>())
+        .unwrap_or(0);
 
     loop {
         clear_background(DARKPURPLE);
@@ -79,6 +85,7 @@ async fn main() {
             bullets.clear();
             circle.x = screen_width() / 2.0;
             circle.y = screen_height() / 2.0;
+            score = 0;
         }
 
         // Handle input and movement
@@ -118,6 +125,9 @@ async fn main() {
 
         // Set gameover to true if circle collides with any square
         if squares.iter().any(|square| square.collides_with(&circle)) {
+            if score == high_score {
+                fs::write("highscore.dat", high_score.to_string()).ok();
+            }
             gameover = true;
         }
         for bullet in &mut bullets {
@@ -125,6 +135,8 @@ async fn main() {
                 if bullet.collides_with(square) {
                     bullet.collided = true;
                     square.collided = true;
+                    score += square.size.round() as u32;
+                    high_score = high_score.max(score);
                 }
             }
         }
@@ -137,6 +149,23 @@ async fn main() {
         for square in &squares {
             draw_rectangle(square.x, square.y, square.size, square.size, GREEN);
         }
+        draw_text(
+            format!("Score: {}", score).as_str(),
+            10.0,
+            35.0,
+            25.0,
+            WHITE,
+        );
+        let highscore_text = format!("High score: {}", high_score);
+        let text_dimensions = measure_text(highscore_text.as_str(), None, 25, 1.0);
+
+        draw_text(
+            highscore_text.as_str(),
+            screen_width() - text_dimensions.width - 10.0,
+            35.0,
+            25.0,
+            WHITE,
+        );
 
         if gameover {
             let text = "GAME OVER";
