@@ -135,6 +135,32 @@ async fn main() {
     );
     bullet_sprite.set_animation(1);
 
+    let mut ship_sprite = AnimatedSprite::new(
+        16,
+        24,
+        &[
+            Animation {
+                name: "idle".to_string(),
+                row: 0,
+                frames: 2,
+                fps: 12,
+            },
+            Animation {
+                name: "left".to_string(),
+                row: 2,
+                frames: 2,
+                fps: 12,
+            },
+            Animation {
+                name: "right".to_string(),
+                row: 4,
+                frames: 2,
+                fps: 12,
+            },
+        ],
+        true,
+    );
+
     loop {
         clear_background(BLACK);
         material.set_uniform("iResolution", (screen_width(), screen_height()));
@@ -208,13 +234,16 @@ async fn main() {
                     game_state = GameState::Paused;
                 }
 
+                ship_sprite.set_animation(0);
                 // Handle input and movement
                 if is_key_down(KeyCode::Left) {
                     circle.x -= circle.speed * delta_time;
                     direction_modifier -= 0.05 * delta_time;
+                    ship_sprite.set_animation(1);
                 } else if is_key_down(KeyCode::Right) {
                     circle.x += circle.speed * delta_time;
                     direction_modifier += 0.05 * delta_time;
+                    ship_sprite.set_animation(2);
                 }
                 if is_key_down(KeyCode::Up) {
                     circle.y -= circle.speed * delta_time;
@@ -243,6 +272,9 @@ async fn main() {
                 circle.x = clamp(circle.x, circle.size, screen_width() - circle.size);
                 circle.y = clamp(circle.y, circle.size, screen_height() - circle.size);
 
+                ship_sprite.update();
+                bullet_sprite.update();
+
                 // Set gameover to true if circle collides with any square
                 if squares.iter().any(|square| square.collides_with(&circle)) {
                     if score == high_score {
@@ -265,7 +297,21 @@ async fn main() {
                 for bullet in &bullets {
                     draw_circle(bullet.x, bullet.y, bullet.size, RED);
                 }
-                draw_circle(circle.x, circle.y, circle.size, YELLOW);
+
+                // Draw the ship
+                let ship_frame = ship_sprite.frame();
+                draw_texture_ex(
+                    &ship_texture,
+                    circle.x - ship_frame.dest_size.x,
+                    circle.y - ship_frame.dest_size.y,
+                    WHITE,
+                    DrawTextureParams {
+                        dest_size: Some(ship_frame.dest_size * 2.0),
+                        source: Some(ship_frame.source_rect),
+                        ..Default::default()
+                    }
+                );
+
                 for square in &squares {
                     draw_rectangle(square.x, square.y, square.size, square.size, GREEN);
                 }
