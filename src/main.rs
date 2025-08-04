@@ -1,4 +1,5 @@
 use std::fs;
+use std::time::Instant;
 
 use macroquad::audio::{PlaySoundParams, load_sound, play_sound, play_sound_once, stop_sound};
 use macroquad::experimental::animation::{AnimatedSprite, Animation};
@@ -17,6 +18,12 @@ enum GameState {
     Playing,
     Paused,
     GameOver,
+}
+
+enum EnemyMoveDirection {
+    Left,
+    Right,
+    Down,
 }
 
 impl Shape {
@@ -51,7 +58,16 @@ const VERTEX_SHADER: &str = "#version 100
     }
 ";
 
-#[macroquad::main("Space Invaders")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "Space Invaders".to_string(),
+        window_width: 800,
+        window_height: 600,
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
 async fn main() {
     rand::srand(miniquad::date::now() as u64);
     const SPEED: f32 = 300.0;
@@ -60,7 +76,7 @@ async fn main() {
         size: 32.0,
         speed: SPEED,
         x: screen_width() / 2.0,
-        y: screen_height() / 2.0,
+        y: screen_height() - 50.0,
         collided: false,
     };
     let mut bullets = Vec::new();
@@ -201,6 +217,20 @@ async fn main() {
     let sound_laser = load_sound("laser.wav").await.unwrap();
 
     let mut theme_music_playing = false;
+
+    let mut last_enemy_move_time = Instant::now();
+    let enemy_moves = vec![
+        EnemyMoveDirection::Right,
+        EnemyMoveDirection::Right,
+        EnemyMoveDirection::Right,
+        EnemyMoveDirection::Down,
+        EnemyMoveDirection::Left,
+        EnemyMoveDirection::Left,
+        EnemyMoveDirection::Left,
+        EnemyMoveDirection::Down,
+    ];
+    let mut enemy_moves_index = 0;
+
     loop {
         clear_background(BLACK);
         material.set_uniform("iResolution", (screen_width(), screen_height()));
@@ -240,8 +270,13 @@ async fn main() {
                     squares.clear();
                     bullets.clear();
                     circle.x = screen_width() / 2.0;
-                    circle.y = screen_height() / 2.0;
+                    circle.y = screen_height() - 50.0;
                     score = 0;
+
+                    // Redraw the enemies
+                    populate_enemies(&mut squares);
+
+                    enemy_moves_index = 0;
                     game_state = GameState::Playing;
                 }
                 let title_text = "Space Invaders";
@@ -265,19 +300,6 @@ async fn main() {
             }
             GameState::Playing => {
                 let delta_time = get_frame_time();
-                // Randomly generate the squares
-                if rand::gen_range(0, 99) > 95 {
-                    let size = rand::gen_range(16.0, 100.0);
-                    let speed = rand::gen_range(50.0, 150.0);
-                    let x = rand::gen_range(size / 2.0, screen_width() - size / 2.0);
-                    squares.push(Shape {
-                        size,
-                        speed,
-                        x,
-                        y: -size,
-                        collided: false,
-                    })
-                }
 
                 // If gameover, press space to restart game
                 if is_key_pressed(KeyCode::Escape) {
@@ -295,30 +317,48 @@ async fn main() {
                     direction_modifier += 0.05 * delta_time;
                     ship_sprite.set_animation(2);
                 }
-                if is_key_down(KeyCode::Up) {
-                    circle.y -= circle.speed * delta_time;
-                } else if is_key_down(KeyCode::Down) {
-                    circle.y += circle.speed * delta_time;
-                }
                 if is_key_pressed(KeyCode::Space) {
-                    bullets.push(Shape {
-                        size: 32.0,
-                        speed: circle.speed * 2.0,
-                        x: circle.x,
-                        y: circle.y - 24.0,
-                        collided: false,
-                    });
-                    play_sound_once(&sound_laser);
+                    if bullets.is_empty() {
+                        bullets.push(Shape {
+                            size: 32.0,
+                            speed: circle.speed * 2.0,
+                            x: circle.x,
+                            y: circle.y - 24.0,
+                            collided: false,
+                        });
+                        play_sound_once(&sound_laser);
+                    }
                 }
 
+                // Move the bullets
                 for bullet in &mut bullets {
                     bullet.y -= bullet.speed * delta_time;
                 }
-                for square in &mut squares {
-                    square.y += square.speed * delta_time;
+
+                // Move the enemies
+                let cur_time = Instant::now();
+                let delta = cur_time - last_enemy_move_time;
+                if delta.as_millis() > 1000 {
+                    for square in &mut squares {
+                        match enemy_moves[enemy_moves_index % enemy_moves.len()] {
+                            EnemyMoveDirection::Left => square.x -= square.speed,
+                            EnemyMoveDirection::Right => square.x += square.speed,
+                            EnemyMoveDirection::Down => square.y += square.speed,
+                        }
+                    }
+                    enemy_moves_index += 1;
+                    last_enemy_move_time = Instant::now();
                 }
+
+                // Remove bullets and enemies that are either out of screen or have collided
                 squares.retain(|square| square.y <= screen_height() && !square.collided);
                 bullets.retain(|bullet| bullet.y > bullet.size && !bullet.collided);
+
+                if squares.is_empty() {
+                    game_state = GameState::GameOver;
+                }
+
+                // Keep player within window bounds
                 circle.x = clamp(circle.x, circle.size, screen_width() - circle.size);
                 circle.y = clamp(circle.y, circle.size, screen_height() - circle.size);
 
@@ -463,5 +503,30 @@ async fn main() {
             }
         }
         next_frame().await
+    }
+}
+
+fn populate_enemies(squares: &mut Vec<Shape>) {
+    let y_offset = 70.0;
+    let x_offset = 38.5;
+    for i in 0..3 {
+        for j in 0..10 {
+            let size = if i == 0 {
+                60.0
+            } else if i == 1 {
+                50.0
+            } else {
+                20.0
+            };
+            let speed = 10.0;
+            let x = x_offset + (j as f32 * (2.0 * x_offset));
+            squares.push(Shape {
+                size,
+                speed,
+                x,
+                y: y_offset * (i + 1) as f32,
+                collided: false,
+            });
+        }
     }
 }
